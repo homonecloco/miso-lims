@@ -38,8 +38,8 @@ var Container = Container || {
   },
 
   processLookup: function (json) {
-    if (json.err) {
-      jQuery('#partitionErrorDiv').html(json.err);
+    if (json.error) {
+      jQuery('#partitionErrorDiv').html(json.error);
     }
     else {
       if (json.verify) {
@@ -49,8 +49,7 @@ var Container = Container || {
         }
 
         if (confirm("Found container '" + json.barcode + "'. Import this container?\n\n" + dialogStr)) {
-          jQuery('#partitionErrorDiv').html("");
-          jQuery('#partitionDiv').html(json.html);
+          window.location.href = "/miso/container/"+json.containerId;
         }
       }
     }
@@ -133,10 +132,13 @@ Container.ui = {
       Fluxion.doAjax(
         'containerControllerHelperService',
         'populateContainerOptions',
-        {'sequencerReference': form.value, 'url': ajaxurl},
+        {'sequencerReference': form.value, 'container_cId': jQuery('input[name=container_cId]').val(), 'url': ajaxurl},
         {'doOnSuccess': function (json) {
-          jQuery('#containerPartitions').html(json.partitions);
-        }
+          jQuery('#sequencerReferenceSelect').attr("platformId", json.platformId);
+          if (json.partitions) {
+            jQuery('#containerPartitions').html(json.partitions);
+          }
+          }
         }
       );
     }
@@ -253,6 +255,7 @@ Container.partition = {
 
   insertPoolNextAvailable: function (poolLi) {
     var pool = jQuery(poolLi);
+
     jQuery('.runPartitionDroppable:empty:first').each(function () {
       var newpool = pool.clone().appendTo(jQuery(this));
       newpool.removeAttr("ondblclick");
@@ -278,11 +281,14 @@ Container.partition = {
   selectContainerStudy: function (partition, poolId, projectId) {
     Utils.ui.disableButton('studySelectButton-' + partition + '_' + poolId);
     var studyId = jQuery("select[name='poolStudies" + partition + "_" + projectId + "'] :selected").val();
+    //var sequencerReferenceId = jQuery("select[name='sequencer'] :selected").val();
+
+    var platformId = jQuery("#sequencerReferenceSelect").attr("platformId");
 
     Fluxion.doAjax(
       'containerControllerHelperService',
       'selectStudyForPool',
-      {'poolId': poolId, 'studyId': studyId, 'sequencerReferenceId': jQuery('#sequencerReference').val(), 'url': ajaxurl},
+      {'poolId': poolId, 'studyId': studyId, 'platformId': platformId, 'url': ajaxurl},
       {'doOnSuccess': function (json) {
         var div = jQuery("#studySelectDiv" + partition + "_" + projectId).parent();
         jQuery("#studySelectDiv" + partition + "_" + projectId).remove();
@@ -345,9 +351,21 @@ Container.pool = {
     );
   },
 
-  confirmPoolRemove: function (t) {
+  confirmPoolRemove: function (t, partitionNum) {
     if (confirm("Remove this pool?")) {
-      jQuery(t).parent().remove();
+      if (partitionNum === undefined) {
+        //previously unsaved container, just remove the div
+        jQuery(t).parent().remove();
+      }
+      else {
+        //previously saved container, actually remove the pool from the partition
+        Fluxion.doAjax(
+          'containerControllerHelperService',
+          'removePoolFromPartition',
+          {'container_cId': jQuery('input[name=container_cId]').val(), 'partitionNum': partitionNum, 'url': ajaxurl},
+          {'doOnSuccess': jQuery(t).parent().remove()}
+        );
+      }
     }
   }
 };

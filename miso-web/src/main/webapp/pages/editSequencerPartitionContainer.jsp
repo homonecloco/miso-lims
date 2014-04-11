@@ -56,8 +56,7 @@
     <td class="h">Container ID:</td>
     <td>
       <c:choose>
-        <c:when test="${container.id != 0}"><input type='hidden' id='containerId' name='id'
-                                                   value='${container.id}'/>${container.id}</c:when>
+        <c:when test="${container.id != 0}"><input type='hidden' id='containerId' name='id' value='${container.id}'/>${container.id}</c:when>
         <c:otherwise><i>Unsaved</i></c:otherwise>
       </c:choose>
     </td>
@@ -67,8 +66,8 @@
     <td>Platform:</td>
     <td>
       <c:choose>
-        <c:when test="${container.id != 0 and not empty container.platformType}">
-          <div id="platformTypesDiv">${container.platformType.key}</div>
+        <c:when test="${container.id != 0 and not empty container.platform}">
+          <div id="platformTypesDiv">${container.platform.platformType.key}</div>
         </c:when>
         <c:otherwise>
           <div id="platformTypesDiv"></div>
@@ -76,14 +75,26 @@
       </c:choose>
     </td>
   </tr>
-  <c:if test="${container.id == 0}">
-    <tr>
-      <td>Sequencer:</td>
-      <td id="sequencerReferenceSelect">
-        <i>Please choose a platform above...</i>
-      </td>
-    </tr>
-  </c:if>
+  <c:choose>
+    <c:when test="${container.id != 0 and not empty container.platform}">
+      <tr>
+        <td>Sequencer:</td>
+        <td id="sequencerReferenceSelect" platformId="${container.platform.platformId}">${container.platform.instrumentModel}</td>
+      </tr>
+    </c:when>
+    <c:when test="${container.id != 0}">
+      <tr>
+        <td>Sequencer:</td>
+        <td id="sequencerReferenceSelect"><i>Not yet processed on a run - unknown</i></td>
+      </tr>
+    </c:when>
+    <c:otherwise>
+      <tr>
+        <td>Sequencer:</td>
+        <td id="sequencerReferenceSelect"><i>Please choose a platform above...</i></td>
+      </tr>
+    </c:otherwise>
+  </c:choose>
 </table>
 
 <table width="100%">
@@ -208,16 +219,15 @@
                         <c:when test="${not empty partition.pool}">
                           <ul partition="${partitionCount.index}" bind="partitions[${partitionCount.index}].pool"
                               class="runPartitionDroppable">
-                            <div class="dashboard">
+                            <div class="dashboard" style="position:relative">
                                 <%-- <a href='<c:url value="/miso/pool/${fn:toLowerCase(container.platformType.key)}/${partition.pool.id}"/>'> --%>
                               <a href='<c:url value="/miso/pool/${partition.pool.id}"/>'>
                                   ${partition.pool.name}
                                 (${partition.pool.creationDate})
                               </a><br/>
-                            <span style="font-size:8pt">
+                              <span style="font-size:8pt">
                               <c:choose>
                                 <c:when test="${not empty partition.pool.experiments}">
-
                                   <i><c:forEach items="${partition.pool.experiments}" var="experiment">
                                     ${experiment.study.project.alias} (${experiment.name}: ${fn:length(partition.pool.dilutions)} dilutions)<br/>
                                   </c:forEach>
@@ -231,17 +241,16 @@
                                   <i>No experiment linked to this pool</i>
                                 </c:otherwise>
                               </c:choose>
-                            </span>
+                              </span>
+                              <c:if test="${empty container.run or fn:contains(SPRING_SECURITY_CONTEXT.authentication.principal.authorities,'ROLE_ADMIN')}">
+                              <span style='position: absolute; top: 0; right: 0;' onclick='Container.pool.confirmPoolRemove(this, "${partition.partitionNumber}");' class='float-right ui-icon ui-icon-circle-close'></span>
+                              </c:if>
                             </div>
                           </ul>
                         </c:when>
                         <c:otherwise>
-                          <div id="p_div_${partitionCount.index}"
-                               class="elementListDroppableDiv">
-                            <ul class='runPartitionDroppable' bind='partitions[${partitionCount.index}].pool'
-                                partition='${partitionCount.index}'
-                                ondblclick='Container.partition.populatePartition(this);'/>
-                            </ul>
+                          <div id="p_div_${partitionCount.index}" class="elementListDroppableDiv">
+                            <ul class='runPartitionDroppable' bind='partitions[${partitionCount.index}].pool' partition='${partitionCount.index}' ondblclick='Container.partition.populatePartition(this);'></ul>
                           </div>
                         </c:otherwise>
                       </c:choose>
@@ -257,15 +266,15 @@
     <td width="50%" valign="top">
       <h2>Available Pools</h2>
       <c:choose>
-        <c:when test="${not empty container.platformType}">
+        <c:when test="${not empty container.platform}">
           <input id="showOnlyReady" type="checkbox" checked="true"
-                 onclick="Container.pool.toggleReadyToRunCheck(this, '${container.platformType.key}');"/>Only Ready to Run pools?
+                 onclick="Container.pool.toggleReadyToRunCheck(this, '${container.platform.platformType.key}');"/>Only Ready to Run pools?
           <div align="right" style="margin-top: -23px; margin-bottom:3px">Filter:
             <input type="text" size="8" id="searchPools" name="searchPools"/>
           </div>
           <script type="text/javascript">
             Utils.timer.typewatchFunc(jQuery('#searchPools'), function () {
-              Container.pool.poolSearch(jQuery('#searchPools').val(), '${container.platformType.key}');
+              Container.pool.poolSearch(jQuery('#searchPools').val(), '${container.platform.platformType.key}');
             }, 300, 2);
           </script>
         </c:when>
@@ -293,11 +302,16 @@
 </div>
 
 <script type="text/javascript">
-  <c:if test="${container.id == 0 or empty container.platformType}">
-  jQuery(document).ready(function () {
-    Container.ui.populatePlatformTypes();
-  });
-  </c:if>
+  <c:choose>
+    <c:when test="${container.id == 0 or empty container.platform}">
+      jQuery(document).ready(function () {
+        Container.ui.populatePlatformTypes();
+      });
+    </c:when>
+    <c:otherwise>
+      Container.pool.poolSearch("", '${container.platform.platformType.key}');
+    </c:otherwise>
+  </c:choose>
 </script>
 
 <%@ include file="adminsub.jsp" %>
